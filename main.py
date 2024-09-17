@@ -1,3 +1,6 @@
+import os
+os.environ['CURL_CA_BUNDLE'] = ''
+
 import numpy as np
 import pandas as pd
 import torch
@@ -73,7 +76,7 @@ class custom_sentiment_classifier(nn.Module):
         pooled, _ = torch.max(lstm_out, 1)
         
         # Apply dropout and ReLU
-        output = self.relu(pooled)
+        output = nn.functional.relu(pooled)
 
         return output
 
@@ -82,8 +85,8 @@ class custom_sentiment_classifier(nn.Module):
 train_dataset = TweetDataset(train_encodings, train_df['sentiment'].tolist())
 test_dataset = TweetDataset(test_encodings, test_df['sentiment'].tolist())
 
-train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=8, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True)
 
 # Set device and initialize model
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -95,7 +98,7 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
 criterion = nn.CrossEntropyLoss()
 
 # Training loop
-num_epochs = 3
+num_epochs = 11
 for epoch in range(num_epochs):
     model.train()
     total_loss = 0
