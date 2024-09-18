@@ -73,6 +73,7 @@ class TweetDataset(Dataset):
 class CustomSentimentClassifier(nn.Module):
     def __init__(self):
         super().__init__()
+        self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
             nn.Linear(128, 64),
             nn.ReLU(),
