@@ -72,18 +72,33 @@ class TweetDataset(Dataset):
 
 # Custom sentiment classifier
 class CustomSentimentClassifier(nn.Module):
-    def __init__(self, vocab_size, embed_dim=768, lstm_hidden_dim=1024, num_classes=3):
+    def __init__(self, vocab_size, embed_dim=768, lstm_hidden_dim=1024, num_classes=3, dropout_rate=0.3):
         super(CustomSentimentClassifier, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         self.recurrent = nn.LSTM(embed_dim, lstm_hidden_dim, batch_first=True, dropout=0.2, bidirectional=True)
-        self.linear = nn.Linear(lstm_hidden_dim * 2, num_classes)
+        
+        # Additional fully connected layer
+        self.fc1 = nn.Linear(lstm_hidden_dim * 2, lstm_hidden_dim)
+        self.dropout = nn.Dropout(dropout_rate)
+        
+        # Final output layer
+        self.linear = nn.Linear(lstm_hidden_dim, num_classes)
     
     def forward(self, input_ids, attention_mask):
         embedded = self.embedding(input_ids)
         lstm_out, _ = self.recurrent(embedded)
+        
+        # Pooling
         pooled, _ = torch.max(lstm_out, 1)
-        output = self.linear(pooled)
+        
+        # Additional fully connected layer
+        fc1_out = self.fc1(pooled)
+        fc1_out = self.dropout(fc1_out)
+        
+        # Final output layer
+        output = self.linear(fc1_out)
         return output
+
 
 
 # Prepare the datasets and dataloaders
