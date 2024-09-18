@@ -1,7 +1,5 @@
-import os
-os.environ['CURL_CA_BUNDLE'] = ''
-
 import numpy as np
+import re
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -23,6 +21,21 @@ test_df = test_df.sample(frac=1).reset_index(drop=True)
 # Ensure all text entries are strings
 train_df['text'] = train_df['text'].astype(str)
 test_df['text'] = test_df['text'].astype(str)
+
+# Remove punctuation, special characters, links, and convert to lowercase
+def clean_text(text):
+    text = re.sub(r'http\S+', '', text)
+    text = re.sub(r'[^A-Za-z0-9]+', ' ', text)
+    text = text.lower()
+    return text
+
+
+train_df['text'] = train_df['text'].apply(clean_text)
+test_df['text'] = test_df['text'].apply(clean_text)
+
+
+# Remove common words with no sentiment meaning
+
 
 # Initialize the tokenizer
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -58,26 +71,18 @@ class TweetDataset(Dataset):
         return len(self.labels)
 
 # Custom sentiment classifier
-class custom_sentiment_classifier(nn.Module):
-    def __init__(self):
-        super(custom_sentiment_classifier, self).__init__()
-        self.embedding = nn.Embedding(num_embeddings, 768)
-        self.recurrent = nn.LSTM(768, 256, 2, batch_first=True, dropout=0.2, bidirectional=True)
-        self.linear = nn.Linear(256, 3)
+class CustomSentimentClassifier(nn.Module):
+    def __init__(self, vocab_size, embed_dim=768, lstm_hidden_dim=1024, num_classes=3):
+        super(CustomSentimentClassifier, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+        self.recurrent = nn.LSTM(embed_dim, lstm_hidden_dim, batch_first=True, dropout=0.2, bidirectional=True)
+        self.linear = nn.Linear(lstm_hidden_dim * 2, num_classes)
     
     def forward(self, input_ids, attention_mask):
-        # Embedding
         embedded = self.embedding(input_ids)
-        
-        # LSTM layer
         lstm_out, _ = self.recurrent(embedded)
-        
-        # Pooling: Max pooling over the sequence dimension
         pooled, _ = torch.max(lstm_out, 1)
-        
-        # Apply dropout and ReLU
-        output = nn.functional.relu(pooled)
-
+        output = self.linear(pooled)
         return output
 
 
@@ -90,11 +95,11 @@ test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True)
 
 # Set device and initialize model
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-model = custom_sentiment_classifier()
+model = CustomSentimentClassifier(vocab_size=num_embeddings)
 model.to(device)
 
 # Define optimizer and loss function
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
 criterion = nn.CrossEntropyLoss()
 
 # Training loop
