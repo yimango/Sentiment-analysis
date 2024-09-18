@@ -1,9 +1,8 @@
-import numpy as np
 import re
 import pandas as pd
 import torch
 import torch.nn as nn
-from transformers import BertTokenizer, BertModel
+from transformers import BertTokenizer
 from torch.utils.data import DataLoader, Dataset
 
 # Load and preprocess the data
