@@ -34,7 +34,7 @@ def load_and_preprocess_data(train_path, test_path):
 train_df, test_df = load_and_preprocess_data('./train.jsonl', './test.jsonl')
 
 # Initialize the tokenizer (simple word-based)
-vectorizer = CountVectorizer(max_features=5000)  # Limit vocab size to 5000 words
+vectorizer = CountVectorizer(max_features=15000)  # Limit vocab size to 5000 words
 
 # Fit the vectorizer on training data and transform both train and test data
 X_train = vectorizer.fit_transform(train_df['text']).toarray()
