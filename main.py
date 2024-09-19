@@ -2,102 +2,91 @@ import re
 import pandas as pd
 import torch
 import torch.nn as nn
-from transformers import BertTokenizer
 from torch.utils.data import DataLoader, Dataset
+from sklearn.feature_extraction.text import CountVectorizer
 
 # Load and preprocess the data
-train_df = pd.read_csv('./train_df.csv')
-train_df = train_df[['text', 'sentiment']]
-# Convert sentiment to 0, 1, 2 from 'negative', 'neutral', 'positive'
-train_df['sentiment'] = train_df['sentiment'].map({'negative': 0, 'neutral': 1, 'positive': 2})
-train_df = train_df.sample(frac=1).reset_index(drop=True)
+def load_and_preprocess_data(train_path, test_path):
+    # Load JSONL files
+    train_df = pd.read_json(train_path, lines=True)
+    test_df = pd.read_json(test_path, lines=True)
+    
+    # Select relevant columns
+    train_df = train_df[['text', 'label']]
+    test_df = test_df[['text', 'label']]
+    
+    # Ensure all text entries are strings
+    train_df['text'] = train_df['text'].astype(str)
+    test_df['text'] = test_df['text'].astype(str)
+    
+    # Remove punctuation, special characters, links, and convert to lowercase
+    def clean_text(text):
+        text = re.sub(r'http\S+', '', text)
+        text = re.sub(r'[^A-Za-z0-9]+', ' ', text)
+        text = text.lower()
+        return text
+    
+    train_df['text'] = train_df['text'].apply(clean_text)
+    test_df['text'] = test_df['text'].apply(clean_text)
+    
+    return train_df, test_df
 
-test_df = pd.read_csv('./test_df.csv')
-test_df = test_df[['text', 'sentiment']]
-test_df['sentiment'] = test_df['sentiment'].map({'negative': 0, 'neutral': 1, 'positive': 2})
-test_df = test_df.sample(frac=1).reset_index(drop=True)
+train_df, test_df = load_and_preprocess_data('./train.jsonl', './test.jsonl')
 
-# Ensure all text entries are strings
-train_df['text'] = train_df['text'].astype(str)
-test_df['text'] = test_df['text'].astype(str)
+# Initialize the tokenizer (simple word-based)
+vectorizer = CountVectorizer(max_features=5000)  # Limit vocab size to 5000 words
 
-# Remove punctuation, special characters, links, and convert to lowercase
-def clean_text(text):
-    text = re.sub(r'http\S+', '', text)
-    text = re.sub(r'[^A-Za-z0-9]+', ' ', text)
-    text = text.lower()
-    return text
+# Fit the vectorizer on training data and transform both train and test data
+X_train = vectorizer.fit_transform(train_df['text']).toarray()
+X_test = vectorizer.transform(test_df['text']).toarray()
 
-
-train_df['text'] = train_df['text'].apply(clean_text)
-test_df['text'] = test_df['text'].apply(clean_text)
-
-
-# Remove common words with no sentiment meaning
-
-
-# Initialize the tokenizer
-tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-
-# Function to tokenize and encode the texts
-def tokenize_and_encode(texts):
-    return tokenizer(
-        texts,
-        padding=True,
-        truncation=True,
-        max_length=128,
-        return_tensors='pt'
-    )
-
-# Tokenize and encode the texts
-train_encodings = tokenize_and_encode(train_df['text'].tolist())
-test_encodings = tokenize_and_encode(test_df['text'].tolist())
-
-num_embeddings = len(tokenizer.vocab)
+# Convert labels to tensors with explicit dtype
+y_train = torch.tensor(train_df['label'].values, dtype=torch.long)
+y_test = torch.tensor(test_df['label'].values, dtype=torch.long)
 
 # Dataset class
 class TweetDataset(Dataset):
-    def __init__(self, encodings, labels):
-        self.encodings = encodings
+    def __init__(self, texts, labels):
+        self.texts = texts
         self.labels = labels
 
     def __getitem__(self, idx):
-        item = {key: val[idx] for key, val in self.encodings.items()}
-        item['labels'] = torch.tensor(self.labels[idx])
-        return item
+        return {
+            'text': torch.tensor(self.texts[idx], dtype=torch.float32),
+            'label': torch.tensor(self.labels[idx], dtype=torch.long)
+        }
 
     def __len__(self):
         return len(self.labels)
 
-# Custom sentiment classifier
-class CustomSentimentClassifier(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.flatten = nn.Flatten()
-        self.linear_relu_stack = nn.Sequential(
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 3),
-            nn.ReLU()
-        )
+# Fully connected (dense) neural network model
+class FeedForwardNN(nn.Module):
+    def __init__(self, input_size):
+        super(FeedForwardNN, self).__init__()
+        self.fc1 = nn.Linear(input_size, 256)  # First fully connected layer
+        self.fc2 = nn.Linear(256, 128)         # Second fully connected layer
+        self.fc3 = nn.Linear(128, 3)           # Output layer with 3 classes
+        self.dropout = nn.Dropout(p=0.7)       # Dropout for regularization
     
     def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu_stack(x)
-        return logits
-
-
+        x = torch.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = torch.relu(self.fc2(x))
+        x = self.dropout(x)
+        x = self.fc3(x)
+        return x
 
 # Prepare the datasets and dataloaders
-train_dataset = TweetDataset(train_encodings, train_df['sentiment'].tolist())
-test_dataset = TweetDataset(test_encodings, test_df['sentiment'].tolist())
+train_dataset = TweetDataset(X_train, y_train)
+test_dataset = TweetDataset(X_test, y_test)
 
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=256, shuffle=False)
 
 # Set device and initialize model
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-model = CustomSentimentClassifier(vocab_size=num_embeddings)
+input_size = X_train.shape[1]  # Number of features in input
+model = FeedForwardNN(input_size=input_size)
 model.to(device)
 
 # Define optimizer and loss function
@@ -105,21 +94,20 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
 criterion = nn.CrossEntropyLoss()
 
 # Training loop
-num_epochs = 11
+num_epochs = 15
 for epoch in range(num_epochs):
     model.train()
     total_loss = 0
     for batch in train_loader:
         # Move inputs and labels to the device (GPU or CPU)
-        input_ids = batch['input_ids'].to(device)
-        attention_mask = batch['attention_mask'].to(device)
-        labels = batch['labels'].to(device)
+        inputs = batch['text'].to(device)
+        labels = batch['label'].to(device)
         
         # Zero gradients
         optimizer.zero_grad()
         
         # Forward pass
-        outputs = model(input_ids, attention_mask)
+        outputs = model(inputs)
         loss = criterion(outputs, labels)
         total_loss += loss.item()
         
@@ -137,12 +125,11 @@ for epoch in range(num_epochs):
     total_predictions = 0
     with torch.no_grad():
         for batch in test_loader:
-            input_ids = batch['input_ids'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
-            labels = batch['labels'].to(device)
+            inputs = batch['text'].to(device)
+            labels = batch['label'].to(device)
             
             # Forward pass
-            outputs = model(input_ids, attention_mask)
+            outputs = model(inputs)
             loss = criterion(outputs, labels)
             val_loss += loss.item()
             
