@@ -138,8 +138,8 @@ class SentimentLSTM(nn.Module):
 # -----------------------
 # DataLoaders
 # -----------------------
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=8192, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=8192, shuffle=False)
 
 # -----------------------
 # Model Initialization and Training Setup
@@ -148,12 +148,12 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 
 # Define hyperparameters for the LSTM model
 vocab_size = len(vocab)
-embedding_dim = 200      # You can adjust this
-hidden_dim = 128         # Hidden state size of the LSTM
+embedding_dim = 128      # You can adjust this
+hidden_dim = 256         # Hidden state size of the LSTM
 output_dim = 3           # Adjust depending on number of classes
 n_layers = 2
 bidirectional = True
-dropout = 0.5
+dropout = 0.2
 pad_idx = vocab['<PAD>']
 
 model = SentimentLSTM(vocab_size, embedding_dim, hidden_dim, output_dim,
@@ -166,7 +166,7 @@ criterion = nn.CrossEntropyLoss()
 # -----------------------
 # Training Loop
 # -----------------------
-num_epochs = 15
+num_epochs = 500
 for epoch in range(num_epochs):
     model.train()
     total_loss = 0
