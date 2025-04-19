@@ -69,8 +69,8 @@ if pad_idx is None:
 # Set Hyperparameters (must match your training settings)
 # -----------------------
 vocab_size = len(vocab)
-embedding_dim = 200      # You can adjust this
-hidden_dim = 128         # Hidden state size of the LSTM
+embedding_dim = 128      # You can adjust this
+hidden_dim = 256         # Hidden state size of the LSTM
 output_dim = 3           # Adjust depending on number of classes
 n_layers = 2
 bidirectional = True
