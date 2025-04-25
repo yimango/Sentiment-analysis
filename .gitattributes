@@ -1,2 +1,7 @@
+test_df.csv filter=lfs diff=lfs merge=lfs -text
+vocab.pkl filter=lfs diff=lfs merge=lfs -text
+sentiment_lstm_model.pth filter=lfs diff=lfs merge=lfs -text
+test.jsonl filter=lfs diff=lfs merge=lfs -text
+train.jsonl filter=lfs diff=lfs merge=lfs -text
 ./test.jsonl[[:space:]]./train.jsonl[[:space:]]./sentiment_lstm_model.pth[[:space:]]./vocab.pkl filter=lfs diff=lfs merge=lfs -text
 *.pth filter=lfs diff=lfs merge=lfs -text
